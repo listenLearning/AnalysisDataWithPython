@@ -6,7 +6,14 @@ from pandas import Series, DataFrame
 import pandas as pd
 import numpy as np
 
+
+def f(x):
+    return Series([x.min(), x.max()], index=['min', 'max'])
+
+
 if __name__ == "__main__":
+    pd.set_option('display.width', 10000)
+    np.random.seed(0)
     # # 索引对象
     # # pandas的索引对象负责管理轴标签和其他元数据(比如轴名称等等).构建Series或DF时,所用到的任何数组或其他序列的标签都会被转换成一个Index
     obj = Series(range(3), index=['a', 'b', 'c'])
@@ -95,8 +102,104 @@ if __name__ == "__main__":
     # print(data)
 
     # # 为了在DF的行上进行标签索引,可以使用索引字段ix.它使你可以通过Numpy式的标记法以及轴标签从DF中选取行和列的子集
-    print(data.ix['Colorado', ['two', 'three']], '\n')
-    print(data.ix[['Colorado', 'Utah'], [3, 0, 1]], '\n')
-    print(data.ix[2], '\n')
-    print(data.ix[:'Utah', 'two'], '\n')
-    print(data.ix[data.three > 5, :3])
+    # print(data.ix['Colorado', ['two', 'three']], '\n')
+    # print(data.ix[['Colorado', 'Utah'], [3, 0, 1]], '\n')
+    # print(data.ix[2], '\n')
+    # print(data.ix[:'Utah', 'two'], '\n')
+    # print(data.ix[data.three > 5, :3])
+
+    # # 算数运算和数据对齐
+    # # pandas最重要的一个功能是,它可以对不同索引的对象进行算数运算.在将对象相加时,如果存在不同的索引对,则结果的索引就是该索引对的并集
+    # # 自动的数据对齐操作在不重叠的索引处引入了Nan值.缺失值会在算术运算过程中传播
+    s1 = Series([7.3, -2.5, 3.4, 1.5], index=['a', 'c', 'd', 'e'])
+    s2 = Series([-2.1, 3.6, -1.5, 4, 3.1], index=['a', 'c', 'e', 'f', 'g'])
+    # print(s1, '\n')
+    # print(s2, '\n')
+    # print(s1 + s2)
+
+    # # 对于DataFrame,对齐操作会同时发生在行和列上
+    df1 = DataFrame(np.arange(9.).reshape((3, 3)), columns=list('bcd'), index=['Ohio', 'Texas', 'Colorado'])
+    df2 = DataFrame(np.arange(12.).reshape((4, 3)), columns=list('bde'), index=['Utah', 'Ohio', 'Texas', 'Oregon'])
+    # print(df1, '\n')
+    # print(df2, '\n')
+    # # 把两个DF相加后会返回一个新的DF,其索引和列为原来那两个DF的并集
+    # print(df1+df2)
+
+    # # 在算术方法中填充值
+    # # 在对不同索引的对象进行算术运算时,你可能希望当一个对象中某个轴标签在另一个对象中找不到时填充一个特殊值(比如0)
+    df1 = DataFrame(np.arange(12.).reshape((3, 4)), columns=list('abcd'))
+    df2 = DataFrame(np.arange(20.).reshape((4, 5)), columns=list('abcde'))
+    # print(df1, '\n')
+    # print(df2, '\n')
+    # print(df1 + df2)
+    # # 使用df1的add方法,传入df2以及一个fill_value参数
+    # print(df1.add(df2, fill_value=0))
+
+    # # 与此类似,在对Series或DataFrame重新索引时,也可以指定一个填充值
+    # print(df1.reindex(columns=df2.columns, fill_value=0))
+
+    # # DataFrame和Series之间的运算
+    # # 和Numpy数组一样,DataFrame和Series之间算数运算也是有明确规定的.
+    arr = np.arange(12.).reshape((3, 4))
+    # print(arr, '\n')
+    # print(arr[0], '\n')
+    # print(arr - arr[0], '\n')
+    frame = DataFrame(np.arange(12.).reshape((4, 3)), columns=list('bde'), index=['Utah', 'Ohio', 'Texas', 'Oregon'])
+    series = frame.ix[0]
+    # print(frame, '\n')
+    # print(series, '\n')
+    # # 默认情况下,DF和Series之间的算数运算会将Series的索引匹配到DF的列,然后沿着行一直向下广播
+    # print(frame - series)
+    # # 如果某个索引值在DataFrame的列或Series的索引中找不到,则参与运算的两个对象就会被重新索引以形成并集
+    series2 = Series(range(3), index=['b', 'c', 'd'])
+    # print(frame+series2)
+
+    # # 匹配行且在列上广播,就必须使用算术运算方法,传入的轴号就是希望匹配的轴
+    series3 = frame['d']
+    # print(frame.sub(series3, axis=0))
+
+    # # 函数应用和映射
+    # # numpyde ufuncs(元素级数组方法)也可以用于操作pandas对象
+    frame = DataFrame(np.random.randn(4, 3), columns=list('bde'), index=['Utah', 'Ohio', 'Texas', 'Oregon'])
+    # print(frame)
+    # print(np.abs(frame))
+
+    # # 另一种常见的操作是,将函数应用到由各列或行所形成的一维数组上.DataFrame的apply方法即可实现此功能
+    f = lambda x: x.max() - x.min()
+
+    # print(frame.apply(f), '\n')
+    # print(frame.apply(f, axis=1))
+
+    # # 许多最为常见的数组统计功能都被实现成DF的方法,因此无需使用apply方法
+    # # 除标量值外,传递给apply的函数还可以返回有多个值组成的Series
+    # print(frame.apply(f))
+
+    # # 此外,元素级的Python函数也是可以用的.假如想得到frame中各个浮点值的格式化字符串,使用applymap即可
+    # # 之所以叫applymap,是因为有一个用于应用元素级函数的map方法
+    format = lambda x: '%.2f' % x
+    # print(frame.applymap(format))
+    # print(frame['e'].map(format))
+
+    # # 排序和排名
+    # # 根据条件对数据集排序(sorting)也是一种重要的内置运算.要对行或列索引进行排序(按字典排序),可以使用sort_index方法,它将返回一个已排序的新对象
+    obj = Series(range(4), index=['d', 'a', 'b', 'c'])
+    # print(obj.sort_index())
+
+    # # 对于DF而言,则可以根据任意一个轴上的索引进行排序
+    frame = DataFrame(np.arange(9).reshape((3, 3)), index=['3', '1', '0'], columns=['d', 'a', 'b'])
+    # print(frame, '\n')
+    # print(frame.sort_index(), '\n')
+    # print(frame.sort_index(axis=1))
+    # # 数据默认是按升序排序的,但也可以降序排列
+    # print(frame.sort_index(axis=1, ascending=False))
+    # # 若要按值对Series进行排序,可使用sort_values方法
+    obj = Series([4, 7, -3, 2])
+    # print(obj.sort_values())
+    # # 在排序时,任何缺失值默认都会被放到Series末尾
+    obj = Series([4, np.nan, 7, np.nan, -3, 2])
+    # print(obj,'\n')
+    # print(obj.sort_values(ascending=False))
+    # # 在DF上,根据一个或多个列中的值进行排序.将一个或多个列的名字传递给by选项即可
+    frame = DataFrame({'b': [4, 7, -3, 2], 'a': [0, 1, 0, 1]})
+    print(frame, '\n')
+    print(frame.sort_values(by=['b', 'a']))
