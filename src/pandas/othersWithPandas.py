@@ -24,8 +24,4 @@ if __name__ == '__main__':
     ser3 = Series(range(3), index=[-5, 1, 3])
     # print(ser3.iat[2], '<==>', ser3.iloc[2])
 
-    # # 面板数据
-    # # pandas有一个Panel数据结构,可以将其看作一个三维版的DF,pandas的大部分开发工作都集中在表格型数据的操作上,
-    # # 因为这些数据更常见,而且层次化索引也是的多数情况下没有必要使用真正的N维数组
-    # # 使用一个由DF对象组成的字典或一个三位ndarray来创建panel对象
-
+    # # 面板数据: src/pandas/面板数据.ipynb
