@@ -255,7 +255,7 @@ if __name__ == "__main__":
     obj = Series(['a', 'a', 'b', 'c'] * 4)
     # print(obj.describe())
 
-    # # 相关系数与协方差:src/pandas/相关系数与协方差.ipynb
+    # # 相关系数与协方差:src/3_pandas/相关系数与协方差.ipynb
 
     # # 唯一值,值计数以及成员资格
     # # 还有一类方法可以从一维Series的值中抽取信息
