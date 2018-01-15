@@ -24,4 +24,4 @@ if __name__ == '__main__':
     ser3 = Series(range(3), index=[-5, 1, 3])
     # print(ser3.iat[2], '<==>', ser3.iloc[2])
 
-    # # 面板数据: src/pandas/面板数据.ipynb
+    # # 面板数据: src/3_pandas/面板数据.ipynb
