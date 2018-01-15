@@ -12,6 +12,10 @@ from urllib.request import urlopen
 from pandas.io.parsers import TextParser
 from lxml import objectify
 import io
+import requests
+import sqlite3
+import pandas.io.sql as sql
+import pymongo
 
 
 class my_dialect(csv.Dialect):
@@ -187,10 +191,67 @@ if __name__ == "__main__":
     store['obj1_col'] = frame['a']
     # print(store)
     # # HDF5文件中的对象可以通过字典一样的方式进行获取
-    print(store['obj1'])
+    # print(store['obj1'])
 
     # # 读取Microsoft Excel文件
     # # pandas的ExcelFile类支持读取存储在Excel中的表格型数据.由于ExcelFile用到了xlrd和openpyxl包,所以需要先安装它们,通过传入一个xls或xlsx文件的路径即可创建一个excelfile实例
-    # xls_file = pd.ExcelFile('data.xls')
+    xls_file = pd.ExcelFile('../../data/examples/data.xlsx')
     # # 存放在某个工作表中的数据可以通过parse读取到DataFrame中
-    # table = xls_file.parse('Sheet1')
+    table = xls_file.parse('Sheet1')
+    # print(table)
+
+    # # 使用HTML和Web Api
+    url = 'https://api.github.com/repos/pydata/pandas/milestones/28/labels'
+    resp = requests.get(url)
+    # print(resp)
+    data = json.loads(resp.text)
+    # print(DataFrame(data))
+
+    # # 使用数据库
+    # # 在许多应用中,数据很少取自样本文件,因为这种方式存储大量数据很低效,基于SQL的关系型数据库使用非常广泛,数据库的选择通常取决于性能,数据完整性以及应用程序的伸缩性需求
+    # # 将数据从SQL加载到DataFrame的过程很简单,此外pandas还有一些能够简化该过程的函数
+    # query = """
+    # CREATE TABLE test
+    # (a VARCHAR(20),b VARCHAR(20),
+    #  c REAL, d INTEGER);
+    # """
+    # con = sqlite3.connect(":memory")
+    # con.execute(query)
+    # con.commit()
+    # # 插入几行数据
+    # data = [('Atlanta', 'Georgia', 1.25, 6),
+    #         ('Tallahassee', 'Florida', 2.6, 3),
+    #         ('Sacramento', 'California', 1.7, 5)]
+    # stmt = 'INSERT INTO test VALUES (?,?,?,?)'
+    # con.executemany(stmt, data)
+    # con.commit()
+    # # 从表中选取数据时,大部分Python SQL驱动器都会返回一个远足列表
+    # cursor = con.execute('SELECT * FROM test')
+    # rows = cursor.fetchall()
+    # print(rows)
+    # # 将这个元组列表传给DataFrame的构造器,但还需要列名(位于游标的description属性中)
+    # print(cursor.description)
+    # print(DataFrame(rows,columns=zip(*cursor.description)[0]))
+    # # pandas的read_frame函数可以简化以上过程,只需传入select语句和连接对象即可
+    # print(sql.read_sql('select * from test', con))
+
+    # # 存取MongoDB中的数据
+    client = pymongo.MongoClient('localhost', 27017)
+    # # 存储在MongoDB中的文档被组织在数据库中的集合中.MongoDB服务器的每个运行示例可以由很多个数据库,而每个数据库又可以有多个集合
+    # # 得到数据库
+    db = client['local']
+    # # 得到一个数据集合
+    tweets = db['tweets']
+    # # 将tweet加载进来并通过tweets.save逐个存入集合中
+    url = 'https://api.github.com/repos/pydata/pandas/milestones/28/labels'
+    resp = requests.get(url)
+    data = json.loads(resp.text)
+    for tweet in data:
+        tweets.save(tweet)
+    # # 保存之后可以用一下的代码查询
+    cursor = tweets.find({'id':76812})
+    # print(cursor)
+    # # 返回的游标是一个迭代器,它可以为每个文档产生一个字典
+    tweet_fields = ['id','url','name','color']
+    result = DataFrame(list(cursor),columns=tweet_fields)
+    # print(result)
