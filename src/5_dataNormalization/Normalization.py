@@ -5,6 +5,7 @@ __author__ = " Ng WaiMing "
 from pandas import DataFrame, Series
 import pandas as pd
 import numpy as np
+import re
 
 if __name__ == "__main__":
     pd.set_option('display.width', 100000)
@@ -302,5 +303,78 @@ if __name__ == "__main__":
     # # # # 获取全部含有"超过3或-3的值"的行,可以利用布尔型DF以及any方法
     # print(data[(np.abs(data)>3).any(1)])
     # # # # 将值限制在区间-3到3以内
-    data[np.abs(data)>3] = np.sign(data)*3
-    print(data.describe())
+    data[np.abs(data) > 3] = np.sign(data) * 3
+    # print(data.describe())
+
+    # # # 排列和随机采样
+    # # # # 利用numpy.random.permutation函数可以轻松实现对Series或DF的列的排列工作.通过需要排列的轴的长度调用permutation.可产生一个表示新顺序的整数数组
+    df = DataFrame(np.arange(20).reshape(5, 4))
+    sampler = np.random.permutation(5)
+    # print(sampler)
+    # # # # 在基于ix的索引操作或take函数中使用sampler
+    # print(df,'\n')
+    # print(df.take(sampler))
+    # # # # 不想用替换的方式选取随机子集,则可以使用permutation: 从permutation返回额数组中切下前k个元素,其中k为期望的子集大小
+    # print(df.take(np.random.permutation(len(df))[:3]))
+    # # # # 要通过替换的方式产生样本,最快的方式是通过np.random.randint得到一组随机整数
+    bag = np.array([5, 7, -1, 6, 4])
+    sampler = np.random.randint(0, len(bag), size=10)
+    # print(sampler,'\n')
+    draws = bag.take(sampler)
+    # print(draws)
+
+    # # # 计算指标/哑变量
+    # # # # 另一种常用于统计建模或机器学习的转换方式是:将分类变量转换为"哑变量矩阵"或"指标矩阵".
+    # # # # 如果DF的某一列中含有k个不同的值,则可以派生出一个K列矩阵或df(其值全为1和0)
+    # # # # pandas有一个get_dummies函数可以实现该功能
+    df = DataFrame({"key": ['b', 'b', 'a', 'c', 'a', 'b'], 'data1': range(6)})
+    # print(df, '\n')
+    # print(pd.get_dummies(df['key']))
+    # # # # get_dummies参数predif可以为指标df的列加上一个前缀,以便能跟其它数据进行合并
+    dummies = pd.get_dummies(df['key'], prefix='key')
+    df_with_dummy = df[['data1']].join(dummies)
+    # print(df_with_dummy)
+    # # # # 如果DF中的某行同属于多个分类
+    mnames = ['movie_id', 'title', 'genres']
+    movies = pd.read_csv('../../data/dataSets/movielens/movies.dat', sep='::', header=None, names=mnames,
+                         engine='python')
+    # print(movies.head())
+    # # # # 腰围每个genre添加指标变量就需要做一些数据规整操作.
+    # # # # # 1.从数据集中抽取出不同的genre值
+    genre_iter = (set(x.split('|')) for x in list(movies.genres))
+    genres = sorted(set.union(*genre_iter))
+    # # # # # 2.从一个全零df开始构建指标df
+    dummies = DataFrame(np.zeros((len(movies), len(genres))), columns=genres)
+    # # # # # 3.迭代每一部电影并将dummies各行的项设置为1
+    for i, gen in enumerate(movies.genres):
+        dummies.ix[i, gen.split('|')] = 1
+    # # # # # 4.将movies合并起来
+    movies_windic = movies.join(dummies.add_prefix('Genre_'))
+    # print(movies_windic.ix[0])
+    # # # # 一个对统计应用有用的秘诀是:结合get_dummies和诸如cut之类的离散化函数
+    values = np.random.rand(10)
+    # print(values)
+    bins = [0, 0.2, 0.4, 0.6, 0.8, 1]
+    # print(pd.get_dummies(pd.cut(values, bins)))
+    # # 字符串操作
+    # # # 字符串对象方法(略)
+    # # # z哼则表达式(略)
+    # # # pandas中矢量化的字符串函数
+    # # # # 清理待分析的散乱数据时,常常需要做一些字符串规整化工作.
+    data = {'Dave': 'dave@google.com', 'Steve': 'steve@gmail.com',
+            'Rob': 'rob@gmail.com', 'Wes': np.nan}
+    data = Series(data)
+    # print(data)
+    # print(data.isnull())
+    # # # # 通过data.map,所有字符串和正则表达式方法都能被应用于(传入lambda表达式或其他函数)各个值.但是如果存在NA就会报错.Series有一些能够跳过NA值的字符串操作方法.通过Series的str属性即可访问这些方法
+    # # # # str.contains可以检查各个值是否含有指定字符串
+    # print(data.str.contains('gmail'))
+    # # # # 也可以使用正则表达式,还可以加上任意re选项(如IGNORECASE)
+    pattern = r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}'
+    # print(pattern)
+    # print(data.str.findall(pattern, flags=re.IGNORECASE))
+    # # # # 实现矢量化的元素或去操作方法有两个:1.使用str.get,2.在str属性上使用索引
+    matches = data.str.match(pattern, flags=re.IGNORECASE)
+    # print(matches)
+    # print(matches.str.get(1))
+    # print(matches.str[0])
