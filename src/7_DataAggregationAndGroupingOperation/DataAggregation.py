@@ -11,6 +11,18 @@ def peak_to_peak(arr):
     return arr.max() - arr.min()
 
 
+def demean(arr):
+    return arr - arr.mean()
+
+
+def top(df, n=5, column='tip_pct'):
+    return df.sort_values(by=column)[-n:]
+
+
+def get_stats(group):
+    return ({'min': group.min(), 'max': group.max(), 'count': group.count(), 'mean': group.mean()})
+
+
 if __name__ == "__main__":
     np.random.seed(0)
     pd.set_option('display.width', 100000)
@@ -143,4 +155,47 @@ if __name__ == "__main__":
     # print(df)
     k1_means = df.groupby('key1').mean().add_prefix('mean_')
     # print(k1_means)
-    print(pd.merge(df,k1_means,left_on='key1',right_index=True))
+    # print(pd.merge(df,k1_means,left_on='key1',right_index=True))
+    # # # # 在groupby上使用transform
+    key = ['one', 'two', 'one', 'two', 'one']
+    # print(people.groupby(key).mean(),'\n')
+    # # # # transform会将一个函数应用到各个分组,然后将结果放置到合适的位置上.如果各分组产生的是一个标量值,则该值就会被广播出去.
+    # print(people.groupby(key).transform(np.mean))
+    # # # # 从各组中减去平均值,为此,先创建一个距平化函数,然后将其传给transform
+    demeaned = people.groupby(key).transform(demean)
+    # print(demeaned)
+    # # # # 查看各组平均值是否为0
+    # print(demeaned.groupby(key).mean())
+
+    # # # Apply:一般性的"拆分-应用-合并"
+    # # # # 跟aggregate一样,transform也是一个有着严格条件的特殊函数,传入的函数只能产生两种结果,瑶妹产生一个可以广播的标量值(如np.mean),要么产生一个相同大小的结果数组.
+    # # # # 最一般化的groupby方法是apply.apply会将待处理的对象拆分成多个片段,然后对各片段调用传入的函数,最后尝试将各片段组合到一起
+    # # # # 例:根据分组选出最高的5各tip_pct值.首先,编写一个选取指定列具有最大值的行的函数
+    # print(top(tips,n=6))
+    # # # # 对smoker分组并用该函数调用apply
+    # # # # top函数在DF的各个片段上调用,然后结果由pandas.concat组装到一起,并以分组名称进行了标记.于是,最终结果就有了一个层次化索引,其内层索引值来自原DF
+    # print(tips.groupby('smoker').apply(top))
+    # # # # 如果传给apply的函数能够接受其它参数或关键字,则可以将这些内容放在函数名后面一并传入
+    # print(tips.groupby(['smoker', 'day']).apply(top, n=1, column='total_bill'))
+    result = tips.groupby('smoker')['tip_pct'].describe()
+    # print(result,'\n')
+    # print(result.unstack('smoker'))
+    # # # # 在groupby中,调用诸如describe之类的方法时,实际上只是应用了下面两条代码的快捷方式而已
+    f = lambda x: x.describe()
+    grouped.apply(f)
+
+    # # # 禁止分组键
+    # # # # 分组键会跟原始对象的索引共同构成结果对象中的层次化索引,将group_keys=False传入groupby即可禁止该效果
+    # print(tips.groupby('smoker',group_keys=False).apply(top))
+    # # # 分位数和桶分析
+    # # # # pandas有一些能够根据指定面元或样本分位数将数据拆分成多块的工具(比如cuthe qcut).将这些函数跟groupby结合起来,就能非常轻松地实现对数据集的桶(bucket)或分位数(quantile)分析了
+    frame = DataFrame({'data1': np.random.randn(1000),
+                       'data2': np.random.randn(1000)})
+    factor = pd.cut(frame.data1, 4)
+    print(factor[:10],'\n')
+    # # # #  由cut返回的factor对象可直接用于groupby,因此,可以像下面这样对data2做一些统计计算
+    grouped = frame.data2.groupby(factor)
+    print(grouped.apply(get_stats).unstack(),'\n')
+    # # # # 这些都是长度相等的桶,要根据样本分位数得到大小相等的桶,使用qcut即可.传入labels=False即可只获取分位数的编号
+    grouping = pd.cut(frame.data1)
+
