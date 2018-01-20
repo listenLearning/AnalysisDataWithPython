@@ -5,7 +5,8 @@ __author__ = " Ng WaiMing "
 from pandas import DataFrame, Series
 import pandas as pd
 import numpy as np
-
+import statsmodels.api as sm
+from matplotlib import pyplot as plt
 
 def peak_to_peak(arr):
     return arr.max() - arr.min()
@@ -21,6 +22,24 @@ def top(df, n=5, column='tip_pct'):
 
 def get_stats(group):
     return ({'min': group.min(), 'max': group.max(), 'count': group.count(), 'mean': group.mean()})
+
+
+def draw(deck, n=5):
+    return deck.take(np.random.permutation(len(deck))[:n])
+
+
+def regress(data, yvar, xvars):
+    Y = data[yvar]
+    X = data[xvars]
+    X['intercept'] = 1.
+    result = sm.OLS(Y, X).fit()
+    return result.params
+
+
+def get_top_amounts(group, key, n=5):
+    totals = group.groupby(key)['contb_receipt_amt'].sum()
+    # 根据key对totals进行降序排列
+    return totals.sort_values(ascending=False)[:n]
 
 
 if __name__ == "__main__":
@@ -187,15 +206,192 @@ if __name__ == "__main__":
     # # # 禁止分组键
     # # # # 分组键会跟原始对象的索引共同构成结果对象中的层次化索引,将group_keys=False传入groupby即可禁止该效果
     # print(tips.groupby('smoker',group_keys=False).apply(top))
+
     # # # 分位数和桶分析
     # # # # pandas有一些能够根据指定面元或样本分位数将数据拆分成多块的工具(比如cuthe qcut).将这些函数跟groupby结合起来,就能非常轻松地实现对数据集的桶(bucket)或分位数(quantile)分析了
     frame = DataFrame({'data1': np.random.randn(1000),
                        'data2': np.random.randn(1000)})
     factor = pd.cut(frame.data1, 4)
-    print(factor[:10],'\n')
+    # print(factor[:10], '\n')
     # # # #  由cut返回的factor对象可直接用于groupby,因此,可以像下面这样对data2做一些统计计算
     grouped = frame.data2.groupby(factor)
-    print(grouped.apply(get_stats).unstack(),'\n')
+    # print(grouped.apply(get_stats).unstack(), '\n')
     # # # # 这些都是长度相等的桶,要根据样本分位数得到大小相等的桶,使用qcut即可.传入labels=False即可只获取分位数的编号
-    grouping = pd.cut(frame.data1)
+    grouping = pd.qcut(frame.data1, 10, labels=False)
+    grouped = frame.data2.groupby(grouping)
+    # print(grouped.apply(get_stats).unstack())
 
+    # # # 示例:用于特定分组的值填充缺失值
+    # # # # 对于缺失数据的清理工作,有时会用dropna将其过滤,而有时则可能希望用一个固定值或由数据集本身所衍生出来的值去填充NA值.这时就得使用fillna这个工具了
+    s = Series(np.random.randn(6))
+    s[::2] = np.nan
+    # print(s)
+    # print(s.fillna(s.mean()))
+    # # # # 如果需要对不同的分组填充不同的值,只需将数据分组,并使用apply和一个能够对各数据块调用fillna的函数即可
+    state = ['Ohio', 'New York', 'Vermont', 'Florida', 'Oregon', 'Nevada', 'California', 'Indaho']
+    group_by = ['East'] * 4 + ['West'] * 4
+    data = Series(np.random.randn(8), index=state)
+    data[['Vermont', 'Nevada', 'Indaho']] = np.nan
+    # print(data)
+    # # # # 用分组平均值去填充NA值
+    fill_mean = lambda g: g.fillna(g.mean())
+    # print(data.groupby(group_by).apply(fill_mean))
+    # # # # 此外,可以在代码中预定义各组的填充值,由于分组具有一个name属性,所以我们可以拿来用一下
+    fill_values = {'East': 0.5, 'West': -1}
+    fill_func = lambda g: g.fillna(fill_values[g.name])
+    # print(data.groupby(group_by).apply(fill_func))
+
+    # # # 示例:随机采样和排列
+    # # # # 假设想要从一个大数据集中随机抽取样本以进行蒙特卡罗模拟或其他分析工作."抽取"的方式有很多,其中一些的效率会比其他的高很多.一个办法是,选取np.random.permutation(N)的前K个元素,其中N为完整数据的大小,K为期望的样本大小.
+    # 红桃(Hearts),黑桃(Spades),梅花(Clubs),方片(Diamonds)
+    suits = ['H', 'S', 'C', 'D']
+    card_val = (list(range(1, 11)) + [10] * 3) * 4
+    base_names = ['A'] + list(range(2, 11)) + ['J', 'K', 'Q']
+    cards = []
+    for suit in suits:
+        cards.extend(str(num) + suit for num in base_names)
+    deck = Series(card_val, index=cards)
+    # print(deck)
+    # print(draw(deck))
+    # # # # 假设想要从每种花色中随机抽取两张牌.由于花色是牌名的最后一个字符,所以可以据此进行分组,并使用apply
+    get_suit = lambda card: card[-1]  # 只要最后一个字母就可以了
+    # print(deck.groupby(get_suit).apply(draw, n=2))
+    # # # # 另一种办法
+    # print(deck.groupby(get_suit, group_keys=False).apply(draw, n=2))
+
+    # # # 分组加权平均数和相关系数
+    # # # # 根据groupby的"拆分-应用-合并"范式,df的列于列之间或两个series之间的运算(比如分组加权平均)成为一种标准作业
+    df = DataFrame({'category': ['a', 'a', 'a', 'a', 'b', 'b', 'b', 'b'],
+                    'data': np.random.randn(8),
+                    'weights': np.random.rand(8)})
+    # print(df)
+    # # # # 利用category计算分组加权平均数
+    grouped = df.groupby('category')
+    get_wavg = lambda g: np.average(g['data'], weights=g['weights'])
+    # print(grouped.apply(get_wavg))
+
+    # # # 来自Yahoo!Finance的数据集
+    close_px = pd.read_csv('../../data/examples/stock_px.csv', parse_dates=True, index_col=0)
+    # print(close_px.head(1))
+    # # # # 计算一个由日收益率(通过百分数变化计算)于SPX之间的年度相关系数组成的DF
+    rets = close_px.pct_change().dropna()
+    spx_corr = lambda x: x.corrwith(x['SPX'])
+    by_year = rets.groupby(lambda x: x.year)
+    # print(by_year.apply(spx_corr).head())
+    # # # # 计算列与列之间的相关系数
+    # print(by_year.apply(lambda g:g['AAPL'].corr(g['MSFT'])))
+
+    # # # 示例:面向分组的线性回归
+    # # # # 利用grouby执行更为复杂的分组统计分析,只要函数返回的是pandas对象或标量值即可.
+    # # # # 例如:定义一个函数对各数据块执行普通最小二乘法回归
+    # # # # 按年计算AAPL对SPX收益率的线性回归
+    # print(by_year.apply(regress,'AAPL',['SPX']).head())
+
+    # # # 透视表和交叉表
+    # # # # 透视表是各种电子表格程序和其他数据分析软件中一种常见的数据汇总工具.他根据一个或多个键对数据进行聚合,并根据行和列上的分组键将数据分配到各个矩形区域中.在pandas中,可以通过groupby功能以及(能够利用层次化索引的)重塑运算制作透视表.DF有一个pivot_table方法,此外还有一个顶级的pandas.pivot_table函数.除能为groupby提供便利之外,pivot_table还可以添加分项小计(也叫margins)
+    # # # # 根据sex和smoker计算分组平均数,并将sex和smoker放到行上
+    # print(tips.pivot_table(index=['sex', 'smoker']))
+    # # # # 聚合tip_pct和size,而且根据day进行分组
+    # print(tips.pivot_table(['tip_pct','size'],index=['sex','day'],columns='smoker'))
+    # # # # 对透视表做进一步处理,传入margins=True添加分项小计.这将会添加标签为all的行和列,其值对应于单个等级中所有数据的分组统计.
+    # print(tips.pivot_table(['tip_pct', 'size'], index=['sex', 'day'], columns='smoker', margins=True))
+    # # # # 要使用其他的聚合函数,将其传给aggfunc即可.例如,使用count或len即可得到有关分组大小的交叉表
+    # print(tips.pivot_table('tip_pct', index=['sex', 'smoker'], columns='day', aggfunc=len, margins=True))
+    # # # # 针对空值,可以设置fill_value
+    # print(tips.pivot_table('size', index=['time', 'sex', 'smoker'], columns='day', aggfunc='sum', fill_value=0))
+
+    # # # 交叉表:crosstab
+    # # # # 交叉表是一种用于计算分组频率的特殊透视表
+    data = pd.read_csv('../../data/examples/Wikipedia.csv')
+    # # # # 根据性别和用手习惯对这段数据进行汇总统计,虽然用pivot_table可以实现该功能,但是用pandas.crosstab函数会更方便
+    # print(pd.crosstab(data.Gender,data.Handedness,margins=True))
+    # # # # crosstab的前两个参数可以是数组,Series或数组列表
+    # print(pd.crosstab([tips.time,tips.day],tips.smoker,margins=True))
+
+    # # # 示例:2010联邦选举委员会数据库
+    fec = pd.read_csv('../../data/dataSets/fec/P00000001-ALL.csv', low_memory=False)
+    # print(fec.info(),'\n')
+    # print(fec.loc[123456])
+    # # # # 通过unique获取全部的候选人名单
+    unique_cands = fec.cand_nm.unique()
+    # print(unique_cands)
+    # # # # 利用字典说明党派关系
+    parties = {'Bachmann, Michelle': 'Republican',
+               'Cain, Herman': 'Republican',
+               'Gingrich, Newt': 'Republican',
+               'Huntsman, Jon': 'Republican',
+               'Johnson, Gary Earl': 'Republican',
+               'McCotter, Thaddeus G': 'Republican',
+               'Obama, Barack': 'Democrat',
+               'Paul, Ron': 'Republican',
+               'Pawlenty, Timothy': 'Republican',
+               'Perry, Rick': 'Republican',
+               "Roemer, Charles E. 'Buddy' III": 'Republican',
+               'Romney, Mitt': 'Republican',
+               'Santorum, Rick': 'Republican'}
+    # # # # 通过以上映射以及Series对象的map方法,可以根据候选人姓名得到一组党派信息
+    # print(fec.cand_nm[123456:123461])
+    fec['party'] = fec.cand_nm.map(parties)
+    # print(fec['party'].value_counts())
+    # # # # 注意,1.该数据既包括赞助也包括退款(负的出资额)
+    # print((fec.contb_receipt_amt>0).value_counts())
+    # # # # 为简化分析,限定该数据集只能由正的出资额
+    fec = fec[fec.contb_receipt_amt > 0]
+    # # # # 创建一个只包含主要候选人的子集
+    fec_mrbo = fec[fec.cand_nm.isin(['Obama, Barack', 'Romney, Mitt'])]
+
+    # # # 根据职业和雇主计赞助信息
+    # # # # 根据职业机算出资总额
+    # print(fec.contbr_occupation.value_counts()[:10])
+    occ_mapping = {
+        'INFORMATION REQUESTED PER BEST EFFORTS': 'NOT PROVIDED',
+        'INFORMATION REQUESTED': 'NOT PROVIDED',
+        'INFORMATION REQUESTED (BEST EFFORTS)': 'NOT PROVIDED',
+        'C.E.O.': 'CEO'
+    }
+    # # # # 如果没有提供相关映射,则返回x
+    f = lambda x: occ_mapping.get(x, x)
+    fec.contbr_occupation = fec.contbr_occupation.map(f)
+    emp_mapping = {
+        'INFORMATION REQUESTED PER BEST EFFORTS': 'NOT PROVIDED',
+        'INFORMATION REQUESTED': 'NOT PROVIDED',
+        'SELF': 'SELF-EMPLOYED',
+        'SELF EMPLOYED': 'SELF-EMPLOYED',
+    }
+    f = lambda x: emp_mapping.get(x, x)
+    fec.contbr_employer = fec.contbr_employer.map(f)
+    # # # # 通过pivot_table根据党派和职业对数据进行聚合,然后过滤掉总出资额不足200万美元的数据
+    by_occupation = fec.pivot_table('contb_receipt_amt', index='contbr_occupation', columns='party', aggfunc='sum')
+    over_2mm = by_occupation[by_occupation.sum(1) > 2000000]
+    # print(over_2mm.head())
+    # over_2mm.plot(kind='barh')
+    # plt.show()
+    # # # # 根据职业和估值进行聚合
+    grouped = fec_mrbo.groupby('cand_nm')
+    # print(grouped.apply(get_top_amounts, 'contbr_occupation', n=7))
+    # print(grouped.apply(get_top_amounts, 'contbr_employer', n=10))
+
+    # # # 对出资额分组
+    # # # # 利用cut函数根据出资额的大小将数据离散化到多个面元中
+    bins = np.array([0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000])
+    labels = pd.cut(fec_mrbo.contb_receipt_amt, bins)
+    # print(labels)
+    # # # # 根据侯选人姓名以及面元标签对数据进行分组
+    grouped = fec_mrbo.groupby(['cand_nm', labels])
+    # print(grouped.size().unstack(0))
+    bucket_sums = grouped.contb_receipt_amt.sum().unstack(0)
+    # print(bucket_sums)
+    normed_sums = bucket_sums.div(bucket_sums.sum(axis=1), axis=0)
+    # print(normed_sums)
+    # normed_sums[:-2].plot(kind='barh',stacked=True)
+    # plt.show()
+
+    # # # 根据州统计赞助信息
+    # # # # 根据候选人和州对数据进行聚合
+    grouped = fec_mrbo.groupby(['cand_nm', 'contbr_st'])
+    totals = grouped.contb_receipt_amt.sum().unstack(0).fillna(0)
+    totals = totals[totals.sum(1) > 100000]
+    # print(totals.head(10))
+    # # # # 对各行除以总赞助额,就会得到各候选人在各州的总赞助额比例
+    percent = totals.div(totals.sum(1), axis=0)
+    # print(percent.head(10))
