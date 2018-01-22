@@ -67,3 +67,17 @@
 |BA-JAN,BA-FEB...|BusinessYearEnd|每年指定月份的最后一个工作日|
 |AS-JAN,AS-FEB...|YearBegin|每年指定月份的第一个日历日|
 |BAS-JAN,BAS-FEB...|BusinessYearBegin|每年指定月份的第一个工作日|
+
+### resample方法的参数
+|参数|说明|
+|:---|:---|
+|freq|表示重采样频率的字符串或DateOffset,例如'M','5min'或Second(15)|
+|how='mean'|用于产生聚合值的函数名或数组函数,例如"mean",'ohlc',np.max等.默认为mean,其他常用的值有:'first','last','median','ohlc','max','min'|
+|axis=0|重采样的轴,默认为axis=0|
+|fill_method=None|升采样时如何插值,比如'ffill'或'bfill',默认不插值|
+|colsed='right'|在降采样中,各时间段的哪一段时闭合(即包含)的,'right'或'left'.默认为'right'|
+|lable='right'|在降采样中,如何设置聚合值的标签,'right'或'left'(面元的右边界或左边界).例如,9:30到9:35之间的这5分钟会被标记为9:30或9:35.默认为'right'|
+|loffset=None|面元标签的事件校正值.比如'-1s'/Second(-1)用于将聚合标签调早疫苗|
+|limit=None|在前向或后向填充时,允许填充的最大时期数|
+|kind=None|聚合到时期('period')或时间戳('timestamp'),默认聚合到时间序列的索引类型|
+|convention=None|当重采样时期时,将低频率转换到高频率所采用的约定("start"或"end").默认为"end"|
