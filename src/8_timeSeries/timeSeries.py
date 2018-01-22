@@ -297,7 +297,77 @@ if __name__ == "__main__":
 
     # # # 将TimeStamp转换为Period(及其反向过程)
     # # # # 通过使用to_period方法,可以将由时间戳索引的Series和DataFrame对象转换为以时期索引
-    rng = pd.date_range("1/1/2000",periods=3,freq='M')
-    ts = Series(np.random.randn(3),index=rng)
+    rng = pd.date_range("1/1/2000", periods=3, freq='M')
+    ts = Series(np.random.randn(3), index=rng)
     pts = ts.to_period()
-    print(pts)
+    # print(pts)
+    # # # # 由于时期指的是非重叠时间区间,因此对于给定的频率,一个时间戳智能属于一个时期.新PeriodIndex的频率默认是从时间戳推断而来的,也可以制定任何别的频率.结果中允许存在重复时期
+    rng = pd.date_range('1/29/2000', periods=6, freq='D')
+    ts2 = Series(np.random.randn(6), index=rng)
+    # print(ts2)
+    # print(ts2.to_period('M'))
+    # # # # 要转换为时间戳,使用to_timestamp即可
+    # print(pts.to_timestamp(how='E'))
+
+    # # # 通过数组创建PeriodIndex
+    # # # # 固定频率的数据集通常会将时间信息分开存放在多个列中
+    data = pd.read_csv('../../data/examples/macrodata.csv')
+    # print(data.year.head(), '\n')
+    # print(data.quarter.head(), '\n')
+    # # # # 将以上两个数组以及一个频率传入PeriodIndex,就可以将它们合并成DataFrame的一个索引
+    index = pd.PeriodIndex(year=data.year, quarter=data.quarter, freq='Q-DEC')
+    # print(index)
+    data.index = index
+    # print(data.infl.head())
+
+    # # # 重采样及频率转换
+    # # # # 重采样指的是将时间序列从一个频率转换到另一个频率的处理过程.将高频率数据聚合到低频率称为降采样,而将低频率数据转换到高频率则称为升采样.并不是所有的重采样都能被划分到这两个大类中.例如,将W-WED(每周三)转换为W-FRI既不是降采样也不是升采样
+    # # # # pandas对象都带有一个resample方法,他是各种频率转换工作的主力函数
+    rng = pd.date_range('1/1/2000', periods=100, freq='D')
+    ts = Series(np.random.randn(len(rng)), index=rng)
+    # print(ts,'\n')
+    # print(ts.resample('M').mean())
+    # print(ts.resample('M',kind='period').mean())
+    # # # # resample是一个灵活高效的方法,可用于处理非常大的时间序列
+
+    # # # 降采样
+    # # # # 将数据聚合到规整的低频率是一件非常普通的时间序列处理任务,待聚合的数据不必拥有固定的频率,期望的频率会自动定义聚合的面元边界,这些面元用于将事件序列拆分为多个片段
+    # # # # 各时间段都是半开放的.一个数据点智能属于一个时间段,所有时间段的并集必须能组成整个时间帧.在用resample对数据进行降采样时,需要考虑两样东西:1.各区间哪边时闭合的.2.如何标记各个聚合面元,用区间的开头还是末尾
+    rng = pd.date_range('1/1/2000', periods=12, freq='T')
+    ts = Series(np.arange(12), index=rng)
+    # print(ts)
+    # # # # 通过求和的方式将以上数据聚合到"5分钟"块中
+    # print(ts.resample('5min').mean())
+    # # # # 传入的频率将会以"5分钟"的增量定义面元边界.默认情况下,面元的右边界时包含的,因此00:00到00:05的区间中是包含00:05的.传入closed='left'会让区间以左边界闭合
+    # print(ts.resample('5min',closed='right').mean())
+    # # # # 传入lable='left'即可用面元的左边界对其进行标记
+    # print(ts.resample('5min',closed='left',label='left').mean())
+    # # # # 对结果索引做一些位移,比如从右边界减去一秒以便更容易明白时间戳到底表示的是哪个区间.只需要用过loffset设置一个字符串或日期偏移量即可实现
+    # print(ts.resample('5min', loffset='-1s', label='left', closed='left').sum())
+
+    # # # OHLC重采样
+    # # # # 金融领域中有一种无所不在的时间序列聚合方式,即计算各面元的四个值,第一个值(open,开盘),最后一个值(close,收盘)，最大值(high,最高)以及最小值(low,最低).传入how='ohlc'即可得到一个含有这四种聚合值的DF,整个过程很高效,只需一次扫描即可计算出结果
+    # print(ts.resample('5min').ohlc())
+
+    # # # 通过groupby进行重采样
+    # # # 另一种采样的办法是使用pandas的groupby功能
+    rng = pd.date_range('1/1/2000', periods=100, freq='D')
+    ts = Series(np.arange(100), index=rng)
+    # print(ts.groupby(lambda x: x.month).mean())
+    # print(ts.groupby(lambda x: x.weekday).mean())
+
+    # # # 升采样和插值
+    # # # # 在将数据从低频率转换到高频率时,就不需要聚合了
+    frame = DataFrame(np.random.randn(2, 4),
+                      index=pd.date_range('1/1/2000', periods=2, freq='W-WED'),
+                      columns=['Colorado', 'Texas', 'New York', 'Ohio'])
+    # print(frame)
+    # # # # 将其重采样到日频率,默认会引入缺失值
+    df_daily = frame.resample('D')
+    # print(df_daily, '\n')
+    # print(frame.resample('D').ffill())
+
+    # # # 同样,这里也可以值填充指定的时期数(目的是限制前面的观测值的持续使用距离)
+    # print(frame.resample('D', limit=2).ffill())
+    # # # # 注意,新的日期索引完全没有必要跟旧的相交
+    print(frame.resample('W-THU').ffill())
