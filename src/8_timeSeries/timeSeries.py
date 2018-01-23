@@ -11,6 +11,8 @@ import calendar
 from dateutil.parser import parse
 from pandas.tseries.offsets import Hour, Minute, Day, MonthEnd
 import pytz
+from matplotlib import pyplot as plt
+from scipy.stats import percentileofscore as per
 
 if __name__ == "__main__":
     np.random.seed(0)
@@ -366,8 +368,88 @@ if __name__ == "__main__":
     df_daily = frame.resample('D')
     # print(df_daily, '\n')
     # print(frame.resample('D').ffill())
-
     # # # 同样,这里也可以值填充指定的时期数(目的是限制前面的观测值的持续使用距离)
     # print(frame.resample('D', limit=2).ffill())
     # # # # 注意,新的日期索引完全没有必要跟旧的相交
-    print(frame.resample('W-THU').ffill())
+    # print(frame.resample('W-THU').ffill())
+
+    # # # 通过时期进行重采样
+    # # # # 对那些使用时期索引的数据进行重采样是件非常简单的事情
+    frame = DataFrame(np.random.randn(24, 4), index=pd.period_range('1-2000', '12-2001', freq='M'),
+                      columns=['Colorado', 'Texas', 'New York', 'Ohio'])
+    # print(frame[:5])
+    annual_frame = frame.resample('A-DEC').mean()
+    # print(annual_frame)
+    # # # # 升采样要稍微麻烦一点,必须决定在新频率中各区间的哪端用于放置原来的值,就像asfreq方法那样.convention参数默认为'end',可设置为'start'
+    # # # # Q-DEC:季度型
+    # print(annual_frame.resample('Q-DEC').ffill())
+    # print(annual_frame.resample('Q-DEC', convention='start').ffill())
+    # # # # 由于时期指的是时间区间,所以升采样和降采样的规则就比较严格:1.在降采样中,目标频率必须是源频率的子时期,2.在升采样中,目标频率必须是源频率的超时期, 如果不满足这些条件,就会引发异常.这主要影响的是按季,年,周计算的频率
+    # print(annual_frame.resample('Q-MAR').ffill())
+
+    # # # 时间序列绘图
+    close_px_all = pd.read_csv('../../data/examples/stock_px.csv', parse_dates=True, index_col=0)
+    close_px = close_px_all[['AAPL', 'MSFT', 'XOM']]
+    close_px = close_px.resample('B').ffill()
+    # print(close_px)
+    # close_px['AAPL'].plot()
+    # close_px.loc['2009'].plot()
+    # close_px['AAPL'].loc['01-2011':'03-2011'].plot()
+    # plt.show()
+    appl_q = close_px['AAPL'].resample('Q-DEC').ffill()
+    # appl_q.loc['2009':].plot()
+
+    # # # 移动窗口函数
+    # # # # 在移动窗口(可以带有指数衰减权数)上计算的各种统计函数也是一类常见于时间序列的数组变换——移动窗口函数,其中还包括那些窗口不定长的函数(如指数甲醛移动平均),跟其它统计函数一样,移动窗口函数也会自动排除缺失值
+    # # # # rolling_mean是其中最简单的一个.它接受一个TimeSeries或DataFrame以及一个window(表示期数)
+    # close_px['AAPL'].plot()
+    # close_px['AAPL'].rolling(window=250, center=False).mean()
+    appl_std250 = close_px['AAPL'].rolling(window=250, min_periods=10).std()
+    # plt.show()
+    # print(appl_std250[5:12])
+    # # # # 计算扩展窗口平均,可以将扩展窗口看作一个特殊的窗口,其长度于时间序列一样,但只需一期(或多期)即可计算一个值
+    # # # # 通过rolling_mean定义扩展平均
+    expanding_mean = lambda x: x.rolling(window=len(x), min_periods=1)
+    # # # # 对DF调用rolling_mean(以及与之类似的函数)会将转换应用到所有的列上
+    # close_px.rolling(window=60).mean().plot(logy=True)
+
+    # # # 指数加权函数
+    # # # # 由于指数加权统计会赋予近期的观测值更大的权数,因此相对于等权统计,它能"适应"更快的变化
+    # fig, axes = plt.subplots(nrows=2, ncols=1, sharex=True, sharey=True, figsize=(12, 7))
+    aapl_px = close_px['AAPL'].loc['2005':'2009']
+    ma60 = aapl_px.rolling(window=60, min_periods=50).mean()
+    ewma60 = aapl_px.ewm(span=60).mean()
+    # aapl_px.plot(style='k-',ax=axes[0])
+    # ma60.plot(style='b--',ax=axes[0])
+    # aapl_px.plot(style='y-',ax=axes[1])
+    # ewma60.plot(style='r--',ax=axes[1])
+    # axes[0].set_title('Simple MA')
+    # axes[1].set_title('Exponentially-weighted MA')
+
+    # # # 二元移动窗口函数
+    # # # # 有些同积运算(如相关系数和协方差)需要在两个时间序列上执行,可以通过计算百分位数变化并使用rolling_corr的方式得到
+    spx_px = close_px_all['SPX']
+    spx_rets = spx_px / spx_px.shift(1) - 1
+    returns = close_px.pct_change()
+    corr = returns['AAPL'].rolling(125, min_periods=100).corr(other=spx_rets)
+    # corr.plot()
+    # plt.show()
+    corr = returns.rolling(125, min_periods=100).corr(other=spx_rets)
+    # corr.plot()
+    # plt.show()
+
+    # # # 用户定义得移动窗口函数
+    # # # # rolling_apply函数能够在移动窗口上应用自己设计得数组函数,位移要求得就是:该函数要能够从数组得各个片段中产生单个值(即约减)
+    score_at_2percent = lambda x: per(x, 0.02)
+    result = returns['AAPL'].rolling(250).apply(score_at_2percent)
+    # result.plot()
+    # plt.show()
+
+    # # # 性能和内存使用方面注意事项
+    # # # # Timrstamp和Period都是以64位整数表示得.也就是说,对于每个数据点,其时间戳需要占用8字节得内存,因此,含有一百万各float64数据点得时间序列需要占用大约16M得内存空间.由于pandas会尽量在多个时间序列之间共享索引,所以创建现有时间序列的视图不会占用更多内存.此外,低频率索引会被存放在一个中心缓存,所以任何固定频率的索引都是该日期缓存的视图.所以,如果有一个很大的低频率时间序列,索引所占用的内存空间将不会很大
+    # # # # 性能方面,pandas对数据对齐(li盎格不同索引的ts1+ts2的幕后工作)和重采样运算进行了高度优化
+    rng = pd.date_range('1/1/2000', periods=10000000, freq='10ms')
+    ts = Series(np.random.randn(len(rng)), index=rng)
+    # print(ts.head())
+    # print(ts.resample('15min').ohlc().info())
+    # # # # 运行时间跟聚合结果的相对大小有一定关系,越高频率的聚合所耗费的时间越多
