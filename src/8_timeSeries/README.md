@@ -81,3 +81,23 @@
 |limit=None|在前向或后向填充时,允许填充的最大时期数|
 |kind=None|聚合到时期('period')或时间戳('timestamp'),默认聚合到时间序列的索引类型|
 |convention=None|当重采样时期时,将低频率转换到高频率所采用的约定("start"或"end").默认为"end"|
+
+### yi东窗口和指数加权函数
+|函数|说明|
+|:---|:---|
+|rolling_count|返回各窗口非NA观测值的数量|
+|rolling_sum|移动窗口的和|
+|rolling_mean|移动窗口的平均值|
+|rolling_median|移动窗口的中位数|
+|rolling_var,rolling_std|移动窗口的方差和标准差,分母为n-1|
+|rolling_skew,rolling_kurt|移动窗口的偏度(三阶距)和峰度(四阶距)|
+|rolling_min,rolling_max|移动窗口的最小值和最大值|
+|rolling_quantile|移动窗口指定百分位数/样本分位数位置的值|
+|rolling_corr,rolling_cov|移动窗口的相关系数和协方差|
+|rolling_apply|对移动窗口应用普通数组函数|
+|ewma|指数加权移动平均|
+|ewmvar,ewmstd|指数加权移动方差和标准差|
+|ewmcorr,ewmcov|指数加权移动相关系数和协方差|
+
+### 指数加权函数
+    另一种使用固定大小窗口及相等权数观测值的办法是,定义一个衰减因子常量,以便使近期的观测值拥有更大的权数.用数学术语来讲,如果ma_1是时间t的移动平均结果,x是时间序列,结果中的各个值可用ma_1=a*ma_{t-1}+(a-1)*x_{-1}进行计算,其中a为衰减因子.衰减因子的定义方式有很多,比较流行的是使用时间间隔,特可以使结果兼容于窗口大小等于时间间隔的简单移动窗口函数
